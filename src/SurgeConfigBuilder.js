@@ -3,7 +3,7 @@ import { generateRules, getOutbounds, PREDEFINED_RULE_SETS } from './config.js';
 import { t } from './i18n/index.js';
 
 export class SurgeConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
         super(inputString, baseConfig || {
             'general': {
                 'allow-wifi-access': false,
@@ -34,7 +34,7 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
                 'use-keyword-filter': false,
                 'hide-udp': false
             }
-        }, lang);
+        }, lang, userAgent);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         this.subscriptionUrl = null;
@@ -61,6 +61,9 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
                 break;
             case 'vmess':
                 surgeProxy = `${proxy.tag} = vmess, ${proxy.server}, ${proxy.server_port}, username=${proxy.uuid}`;
+                if (proxy.alter_id == 0) {
+                    surgeProxy += ', vmess-aead=true';
+                }
                 if (proxy.tls?.enabled) {
                     surgeProxy += ', tls=true';
                     if (proxy.tls.server_name) {

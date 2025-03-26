@@ -4,14 +4,14 @@ import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
 
 export class SingboxConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
         if (baseConfig === undefined) {
             baseConfig = SING_BOX_CONFIG;
             if (baseConfig.dns && baseConfig.dns.servers) {
                 baseConfig.dns.servers[0].detour = t('outboundNames.Node Select');
             }
         }
-        super(inputString, baseConfig, lang);
+        super(inputString, baseConfig, lang, userAgent);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
     }
@@ -102,7 +102,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         this.config.route.rules.unshift(
             { protocol: 'dns', outbound: 'dns-out' },
             { clash_mode: 'direct', outbound: 'DIRECT' },
-            { clash_mode: 'global', outbound: 'GLOBAL' }
+            { clash_mode: 'global', outbound: t('outboundNames.Node Select') }
         );
 
         this.config.route.auto_detect_interface = true;
