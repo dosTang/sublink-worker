@@ -1,5 +1,13 @@
 # 更新日志
 
+## 2025-04-27
+
+- 提升Hysteria2协议兼容性
+
+## 2025-04-23
+
+- 添加俄语支持[#162](https://github.com/7Sageer/sublink-worker/issues/162)
+
 ## 2025-04-04
 
 - Surge 改为远程规则集 (#149 by [@NSZA156](https://github.com/NSZA156))

@@ -16,6 +16,8 @@
       <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare Workers"/>
     </a>
   </p>
+  
+  <p><b>本项目由 <a href="https://github.com/NodeSeekDev/NodeSupport" target="_blank">NodeSupport</a> 赞助支持</b></p>
 </div>
 
 ## 🚀 快速开始
@@ -68,10 +70,9 @@ npm run deploy
 
 ## 📝 最近更新
 
-### 2025-04-04
+### 2025-04-27
 
-- Surge 改为远程规则集 (#149 by [@NSZA156](https://github.com/NSZA156))
-
+- 提升Hysteria2协议兼容性
 
 ## 🔧 项目结构
 
@@ -104,6 +105,28 @@ npm run deploy
 ## ⚠️ 免责声明
 
 本项目仅供学习交流使用，请勿用于非法用途。使用本项目所造成的一切后果由使用者自行承担，与开发者无关。
+
+## 💰 赞助
+
+<div align="center">
+  <h3>感谢以下赞助商对本项目的支持</h3>
+<table border="0">
+  <tr>
+    <td>
+      <a href="https://yxvm.com/" target="_blank" title="YXVM">
+        <img src="https://image.779477.xyz/yxvm.png" alt="YXVM" height="60" hspace="20"/>
+      </a>
+    </td>
+    <td>
+      <a href="https://github.com/NodeSeekDev/NodeSupport" target="_blank" title="NodeSupport">
+        <img src="https://image.779477.xyz/ns.png" alt="NodeSupport" height="60" hspace="20"/>
+      </a>
+    </td>
+  </tr>
+</table>
+  <p><b>NodeSupport赞助了本项目，感谢他们的支持！</b></p>
+  <p>如果您想赞助本项目，请联系开发者 <a href="https://github.com/7Sageer" style="text-decoration: none;">@7Sageer</a></p>
+</div>
 
 ## ⭐ Star History
 
