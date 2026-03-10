@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS } from '../config/index.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { deepCopy, groupProxiesByCountry } from '../utils.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
@@ -7,12 +7,44 @@ import { buildSelectorMembers, buildNodeSelectMembers, uniqueNames } from './hel
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
 import { normalizeGroupName, findGroupIndexByName } from './helpers/groupNameUtils.js';
 
+/**
+ * Check if the client supports MRS (Meta Rule Set) format
+ * MRS is a binary format supported by Clash Meta/mihomo
+ * Legacy Clash clients need YAML format instead
+ * @param {string} userAgent - Client User-Agent string
+ * @returns {boolean} - True if client supports MRS format
+ */
+function supportsMrsFormat(userAgent) {
+    if (!userAgent) return true; // Default to mrs for unknown clients
+    const ua = userAgent.toLowerCase();
+    
+    // Clients confirmed to support MRS format (Clash Meta/mihomo based)
+    if (ua.includes('mihomo') || 
+        ua.includes('meta') ||           // clash.meta, clashx meta, meta-for-android, etc.
+        ua.includes('clash-verge') ||
+        ua.includes('stash') ||
+        ua.includes('verge')) {
+        return true;
+    }
+    
+    // Legacy clients that don't support MRS format
+    if (ua.includes('merlin') ||
+        ua.includes('clashforwindows') ||
+        ua.includes('clashforandroid') ||
+        ua.includes('clash/')) {         // 老版本Clash核心 (Clash/v1.x.x)
+        return false;
+    }
+    
+    // Default: use mrs for unknown clients (most modern clients support it)
+    return true;
+}
+
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, includeAutoSelect = true) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
-        super(inputString, baseConfig, lang, userAgent, groupByCountry);
+        super(inputString, baseConfig, lang, userAgent, groupByCountry, includeAutoSelect);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         this.countryGroupNames = [];
@@ -279,6 +311,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addAutoSelectGroup(proxyList) {
+        if (!this.includeAutoSelect) return;
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         const autoName = this.t('outboundNames.Auto Select');
         if (this.hasProxyGroup(autoName)) return;
@@ -310,7 +343,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             translator: this.t,
             groupByCountry: this.groupByCountry,
             manualGroupName: this.manualGroupName,
-            countryGroupNames: this.countryGroupNames
+            countryGroupNames: this.countryGroupNames,
+            includeAutoSelect: this.includeAutoSelect
         });
 
         const group = {
@@ -334,7 +368,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             translator: this.t,
             groupByCountry: this.groupByCountry,
             manualGroupName: this.manualGroupName,
-            countryGroupNames: this.countryGroupNames
+            countryGroupNames: this.countryGroupNames,
+            includeAutoSelect: this.includeAutoSelect
         });
     }
 
@@ -343,12 +378,22 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             if (outbound !== this.t('outboundNames.Node Select')) {
                 const name = this.t(`outboundNames.${outbound}`);
                 if (!this.hasProxyGroup(name)) {
-                    const proxies = this.buildSelectGroupMembers(proxyList);
-                    this.config['proxy-groups'].push({
+                    let proxies = this.buildSelectGroupMembers(proxyList);
+                    // For rules that should default to DIRECT, move DIRECT to the front
+                    if (DIRECT_DEFAULT_RULES.has(outbound)) {
+                        proxies = ['DIRECT', ...proxies.filter(p => p !== 'DIRECT')];
+                    }
+                    const group = {
                         type: "select",
                         name,
                         proxies
-                    });
+                    };
+                    // Add 'use' field if we have proxy-providers
+                    const providerNames = this.getAllProviderNames();
+                    if (providerNames.length > 0) {
+                        group.use = providerNames;
+                    }
+                    this.config['proxy-groups'].push(group);
                 }
             }
         });
@@ -360,11 +405,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 const name = this.t(`outboundNames.${rule.name}`);
                 if (!this.hasProxyGroup(name)) {
                     const proxies = this.buildSelectGroupMembers(proxyList);
-                    this.config['proxy-groups'].push({
+                    const group = {
                         type: "select",
                         name,
                         proxies
-                    });
+                    };
+                    // Add 'use' field if we have proxy-providers
+                    const providerNames = this.getAllProviderNames();
+                    if (providerNames.length > 0) {
+                        group.use = providerNames;
+                    }
+                    this.config['proxy-groups'].push(group);
                 }
             });
         }
@@ -374,11 +425,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const name = this.t('outboundNames.Fall Back');
         if (this.hasProxyGroup(name)) return;
         const proxies = this.buildSelectGroupMembers(proxyList);
-        this.config['proxy-groups'].push({
+        const group = {
             type: "select",
             name,
             proxies
-        });
+        };
+        // Add 'use' field if we have proxy-providers
+        const providerNames = this.getAllProviderNames();
+        if (providerNames.length > 0) {
+            group.use = providerNames;
+        }
+        this.config['proxy-groups'].push(group);
     }
 
     addCountryGroups() {
@@ -394,11 +451,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         if (manualGroupName) {
             const manualNorm = normalizeGroupName(manualGroupName);
             if (!existingNames.has(manualNorm)) {
-                this.config['proxy-groups'].push({
+                const group = {
                     name: manualGroupName,
                     type: 'select',
                     proxies: manualProxyNames
-                });
+                };
+                // Add 'use' field if we have proxy-providers
+                const providerNames = this.getAllProviderNames();
+                if (providerNames.length > 0) {
+                    group.use = providerNames;
+                }
+                this.config['proxy-groups'].push(group);
                 existingNames.add(manualNorm);
             }
         }
@@ -411,14 +474,20 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             const groupName = `${emoji} ${name}`;
             const norm = normalizeGroupName(groupName);
             if (!existingNames.has(norm)) {
-                this.config['proxy-groups'].push({
+                const group = {
                     name: groupName,
                     type: 'url-test',
                     proxies: proxies,
                     url: 'https://www.gstatic.com/generate_204',
                     interval: 300,
                     lazy: false
-                });
+                };
+                // Add 'use' field if we have proxy-providers
+                const providerNames = this.getAllProviderNames();
+                if (providerNames.length > 0) {
+                    group.use = providerNames;
+                }
+                this.config['proxy-groups'].push(group);
                 existingNames.add(norm);
             }
             countryGroupNames.push(groupName);
@@ -431,7 +500,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 translator: this.t,
                 groupByCountry: true,
                 manualGroupName,
-                countryGroupNames
+                countryGroupNames,
+                includeAutoSelect: this.includeAutoSelect
             });
             nodeSelectGroup.proxies = rebuilt;
         }
@@ -549,7 +619,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     formatConfig() {
         const rules = this.generateRules();
-        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
+        const useMrs = supportsMrsFormat(this.userAgent);
+        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules, useMrs);
         this.config['rule-providers'] = {
             ...site_rule_providers,
             ...ip_rule_providers
